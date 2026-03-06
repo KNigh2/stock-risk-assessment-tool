@@ -1,52 +1,51 @@
 import yfinance as yf
 import numpy as np
 import matplotlib.pyplot as plt
-from yfinance import Ticker
-
 #Get stock data
-tkr=yf.Ticker("AAPL")
-hist=tkr.history(period="150d")
-#Clean data
-hist=hist.drop("Dividends", axis=1)
-hist=hist.drop("Stock Splits", axis=1)
+tkr=yf.Ticker('TSLA')
+hist=tkr.history(period='150d')
+hist=hist.drop("Dividends",axis=1)
+hist=hist.drop("Stock Splits",axis=1)
+#Output history of Ticker for 150 days
+print(hist.head())
 v=hist.index
 
-#Log Calculation
-log_hl=np.log(hist["High"]/hist["Low"])
-log_cl=np.log(hist["Close"]/hist["Open"])
-#Calculate Garman-Klass Volatility
-grks_sigm=0.5*log_hl**2-(2*np.log(2)-1)*log_cl**2
-sigm_f=grks_sigm.rolling(window=10).mean()*100
+mid_price = (hist['High'] + hist['Low']) / 2
 
+#Calculate Parkinson volatility with 10-day smoothing
+sigm = ((hist['High'] - hist['Low']) / (4 * np.log(2))).rolling(window=10).mean()
 
-mean_vol=sigm_f.mean()
-anomaly_th=mean_vol*1.5
-anom=sigm_f[sigm_f>anomaly_th]
+current_sigm = sigm.iloc[-1]
+mean_sigm = sigm.mean()
+dev_rat=current_sigm/mean_sigm
+risk_c="black"
 
-#Panel Open/Close
-
-fig,(ax1,ax2,ax3) = plt.subplots(3,1, figsize=(12, 6), sharex=True)
-ax1.plot(v,hist["Close"], label="Close",color="blue",alpha=0.5)
-ax1.plot(v,hist["Open"],label="Open", color="red",alpha=0.5)
-ax1.legend()
-ax1.title.set_text("Garman-Klass Volatility")
-ax1.grid(True)
-
-#Panel High/Low
-
-ax2.plot(v,hist["High"], label="High",color="green",alpha=0.5)
-ax2.plot(v,hist["Low"], label="Low",color="red",alpha=0.5)
-ax2.grid(True)
-ax2.legend()
-
-#Panel Garman Klass
-
-ax3.fill_between(v, sigm_f, color='blue', alpha=0.3, label="Garman-Klass")
-ax3.axhline(anomaly_th, color='red', alpha=0.5, label="Anomaly")
-ax3.axhline(mean_vol, color='green', alpha=0.5, label="peak risk")
-ax3.scatter(anom.index, anom, color="red", label="anomality risk", s=15, alpha=0.5)
-ax3.legend()
-ax3.grid(True, linestyle='--', linewidth=0.5, color='black', alpha=0.3)
-ax3.set_xlabel("%")
+#Identify risk levels based on deviation ratio
+if dev_rat>1.8:
+    risk="Critical Risk"
+    risk_c = "red"
+elif dev_rat<0.7:
+    risk="Calm"
+    risk_c = "orange"
+else:
+    risk="Normal"
+    risk_c = "green"
+#Output values
+print('=='*30)
+print(f"Analyse risk for : {tkr.ticker}")
+print(f"Hist Norm : {mean_sigm}")
+print(f"Sigma now  : {current_sigm}")
+print(f"verdict:{risk}")
+print('=='*30)
+#Plotting the results
+plt.plot(v, mid_price, color='black', label='Mid Price', alpha=0.5)
+plt.fill_between(v, mid_price + sigm, mid_price - sigm, color='blue', alpha=0.3, label='Dispersion Zone')
+plt.plot(v,hist['High'], color='green', alpha=0.5)
+plt.plot(v,hist['Open'], linestyle='none', marker='o', markerfacecolor='black', markersize=3)
+plt.plot(v,hist['Low'], color='crimson', alpha=0.5)
+#Legend for clear data visualization
+plt.legend(['Close','Parkinson','High','Open','Low'])
+plt.title(f" Анализ {tkr.ticker}  ",color=risk_c,fontsize=13)
+plt.suptitle("Green=Normal, Red=Risk, Orange=Calm", color = 'black')
+plt.grid(True,linestyle='--',alpha=0.8)
 plt.show()
-
